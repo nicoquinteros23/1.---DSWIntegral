@@ -1,49 +1,34 @@
-﻿using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.DependencyInjection;
+﻿using DSWIntegral.Data;
+using DSWIntegral.Middleware;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.OpenApi.Models;
-using DSWIntegral.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Configurar DbContext con EF Core y SQL Server
-var connStr = builder.Configuration.GetConnectionString("DefaultConnection")
-              ?? "Server=localhost,1433;Database=DSW2025;User Id=sa;Password=TuP4ssw0rd!;TrustServerCertificate=True;";
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(connStr));
-
-// 2. Añadir servicios de controllers
+// 1) Servicios
+builder.Services.AddDbContext<AppDbContext>(opt =>
+    opt.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 builder.Services.AddControllers();
-
-// 3. Configurar Swagger/OpenAPI
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc(
-        name: "v1",
-        info: new OpenApiInfo { Title = "DSWIntegral API", Version = "v1" }
-    );
-});
+builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// 4. Middleware de desarrollo: Swagger UI
+// 2) Middleware global de errores
+app.UseMiddleware<GlobalExceptionMiddleware>();   //<-p/ probar la excepcion
+
+// 3) Swagger solo en Development
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "DSWIntegral API v1");
-        c.RoutePrefix = string.Empty; // Swagger en la raíz (opcional)
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "DSWIntegral API V1");
+        c.RoutePrefix = string.Empty;    // opcional: monta Swagger UI en la raíz http://localhost:5000/
     });
 }
 
-// 5. Middlewares globales
-app.UseRouting();
+// 4) Pipeline
+app.UseHttpsRedirection();
 app.UseAuthorization();
-
-// 6. Mapear controllers
 app.MapControllers();
-
 app.Run();

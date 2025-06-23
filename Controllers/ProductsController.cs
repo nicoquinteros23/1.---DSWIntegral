@@ -19,9 +19,17 @@ namespace DSWIntegral.Controllers
         // GET: api/Products
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Product>>> GetProducts()
-            => await _context.Products
+        {
+            //if (true) throw new Exception("¡Prueba de excepción! TEST 2");
+            
+            return await _context.Products
                 .Where(p => p.IsActive)
                 .ToListAsync();
+        }
+          
+ 
+                
+
 
         // GET: api/Products/{id}
         [HttpGet("{id}")]
