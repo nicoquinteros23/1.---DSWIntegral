@@ -1,8 +1,10 @@
 using System;
 using System.ComponentModel.DataAnnotations;
+using Microsoft.EntityFrameworkCore;
 
 namespace DSWIntegral.Models
 {
+    [Index(nameof(SKU), IsUnique = true)]
     public class Product
     {
         [Key]
@@ -14,7 +16,7 @@ namespace DSWIntegral.Models
         [Required]
         public string Name { get; set; }
 
-        public string Description { get; set; }
+        public string? Description { get; set; }
 
         [Range(0.01, double.MaxValue)]
         public decimal CurrentUnitPrice { get; set; }
