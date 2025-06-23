@@ -1,0 +1,36 @@
+# .NET Core
+bin/
+obj/
+.vs/
+*.user
+*.userosscache
+*.suo
+*.dbmdl
+*.jfm
+
+# Docker
+Dockerfile*
+docker-compose*
+.docker/
+
+# IDE
+.idea/
+*.sln.iml
+.vscode/
+
+# Logs
+*.log
+logs/
+
+# Local development settings
+appsettings.Development.json
+appsettings.Local.json
+
+# SQL Server files
+*.mdf
+*.ldf
+*.ndf
+
+# Tools
+.dotnet/
+.tools/
