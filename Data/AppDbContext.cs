@@ -13,6 +13,7 @@ namespace DSWIntegral.Data
         public DbSet<Product> Products { get; set; }
         public DbSet<Customer> Customers { get; set; } = default!;
 
-        // Más DbSet para Order, OrderItem, Customer...
+        public DbSet<Order> Orders { get; set; } = default!;
+        public DbSet<OrderItem> OrderItems { get; set; } = default!;
     }
 }
