@@ -3,6 +3,7 @@ using System.Text.Json;
 using DSWIntegral.Data;
 using DSWIntegral.Middleware;
 using DSWIntegral.Models;
+using DSWIntegral.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -54,6 +55,7 @@ builder.Services.AddCors(options =>
     });
 });
 
+builder.Services.AddScoped<IOrderService, OrderService>();
 var app = builder.Build();
 
 // 2) Middleware global de excepciones

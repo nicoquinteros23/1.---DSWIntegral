@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using DSWIntegral.Dtos;
+using DSWIntegral.Services;
 using DSWIntegral.Data;
 using DSWIntegral.Models;
 
@@ -9,88 +10,70 @@ namespace DSWIntegral.Controllers
     [Route("api/[controller]")]
     public class OrdersController : ControllerBase
     {
-        private readonly AppDbContext _context;
-        public OrdersController(AppDbContext context)
-            => _context = context;
+        private readonly IOrderService _orderService;
+
+        public OrdersController(IOrderService orderService)
+        {
+            _orderService = orderService;
+        }
 
         // GET: api/Orders
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Order>>> GetOrders()
+        [ProducesResponseType(typeof(IEnumerable<OrderResponseDto>), StatusCodes.Status200OK)]
+        public async Task<ActionResult<IEnumerable<OrderResponseDto>>> GetOrders()
         {
-            // Incluimos los items (y opcionalmente el cliente)
-            return await _context.Orders
-                .Include(o => o.Items)
-                .ToListAsync();
+            var orders = await _orderService.GetAllAsync();
+            return Ok(orders);
         }
 
         // GET: api/Orders/{id}
         [HttpGet("{id}")]
-        public async Task<ActionResult<Order>> GetOrder(Guid id)
+        [ProducesResponseType(typeof(OrderResponseDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<ActionResult<OrderResponseDto>> GetOrder(Guid id)
         {
-            var order = await _context.Orders
-                .Include(o => o.Items)
-                .FirstOrDefaultAsync(o => o.Id == id);
-
+            var order = await _orderService.GetByIdAsync(id);
             if (order == null) 
                 return NotFound();
-
-            return order;
+            return Ok(order);
         }
 
         // POST: api/Orders
         [HttpPost]
-        public async Task<ActionResult<Order>> CreateOrder(Order order)
+        [ProducesResponseType(typeof(OrderResponseDto), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult<OrderResponseDto>> CreateOrder([FromBody] CreateOrderDto dto)
         {
-            // 1) Verificar cliente existe
-            if (! await _context.Customers.AnyAsync(c => c.Id == order.CustomerId))
-                return BadRequest(new { Message = $"Customer {order.CustomerId} no encontrado." });
-
-            // 2) Verificar cada producto y stock
-            foreach (var item in order.Items)
+            try
             {
-                var product = await _context.Products.FindAsync(item.ProductId);
-                if (product == null)
-                    return BadRequest(new { Message = $"Producto {item.ProductId} no existe." });
-                if (product.StockQuantity < item.Quantity)
-                    return BadRequest(new { Message = $"Stock insuficiente para SKU {product.SKU}." });
-
-                // 3) Asignar precio actual al item y descontar stock
-                item.UnitPrice = product.CurrentUnitPrice;
-                product.StockQuantity -= item.Quantity;
+                var created = await _orderService.CreateOrderAsync(dto);
+                return CreatedAtAction(nameof(GetOrder), new { id = created.Id }, created);
             }
-
-            // 4) Calcular TotalAmount
-            order.TotalAmount = order.Items.Sum(i => i.UnitPrice * i.Quantity);
-
-            _context.Orders.Add(order);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetOrder), new { id = order.Id }, order);
+            catch (KeyNotFoundException knf)
+            {
+                return BadRequest(new ErrorResponse { Message = knf.Message });
+            }
+            catch (InvalidOperationException inv)
+            {
+                return BadRequest(new ErrorResponse { Message = inv.Message });
+            }
         }
 
         // DELETE: api/Orders/{id}
         [HttpDelete("{id}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> DeleteOrder(Guid id)
         {
-            var order = await _context.Orders
-                .Include(o => o.Items)
-                .FirstOrDefaultAsync(o => o.Id == id);
-
-            if (order == null) 
-                return NotFound();
-
-            // (Opcional) devolver stock si cancelas:
-            foreach (var item in order.Items)
+            try
             {
-                var product = await _context.Products.FindAsync(item.ProductId);
-                if (product != null)
-                    product.StockQuantity += item.Quantity;
+                await _orderService.DeleteAsync(id);
+                return NoContent();
             }
-
-            _context.Orders.Remove(order);
-            await _context.SaveChangesAsync();
-
-            return NoContent();
+            catch (KeyNotFoundException)
+            {
+                return NotFound();
+            }
         }
     }
 }
