@@ -1,8 +1,8 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using DSWIntegral.Dtos;
-using DSWIntegral.Services;
-using DSWIntegral.Data;
 using DSWIntegral.Models;
+using DSWIntegral.Services;
 
 namespace DSWIntegral.Controllers
 {
@@ -21,10 +21,7 @@ namespace DSWIntegral.Controllers
         [HttpGet]
         [ProducesResponseType(typeof(IEnumerable<OrderResponseDto>), StatusCodes.Status200OK)]
         public async Task<ActionResult<IEnumerable<OrderResponseDto>>> GetOrders()
-        {
-            var orders = await _orderService.GetAllAsync();
-            return Ok(orders);
-        }
+            => Ok(await _orderService.GetAllAsync());
 
         // GET: api/Orders/{id}
         [HttpGet("{id}")]
@@ -33,9 +30,7 @@ namespace DSWIntegral.Controllers
         public async Task<ActionResult<OrderResponseDto>> GetOrder(Guid id)
         {
             var order = await _orderService.GetByIdAsync(id);
-            if (order == null) 
-                return NotFound();
-            return Ok(order);
+            return order is null ? NotFound() : Ok(order);
         }
 
         // POST: api/Orders
@@ -73,6 +68,28 @@ namespace DSWIntegral.Controllers
             catch (KeyNotFoundException)
             {
                 return NotFound();
+            }
+        }
+
+        // PUT: api/Orders/{id}/status
+        [HttpPut("{id}/status")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateOrderStatusDto dto)
+        {
+            try
+            {
+                await _orderService.UpdateStatusAsync(id, dto.NewStatus);
+                return NoContent();
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound();
+            }
+            catch (InvalidOperationException inv)
+            {
+                return BadRequest(new ErrorResponse { Message = inv.Message });
             }
         }
     }

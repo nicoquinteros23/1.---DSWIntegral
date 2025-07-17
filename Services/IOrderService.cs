@@ -8,5 +8,11 @@ namespace DSWIntegral.Services
         Task<IEnumerable<OrderResponseDto>> GetAllAsync();
         Task<OrderResponseDto?> GetByIdAsync(Guid id);
         Task DeleteAsync(Guid id);
+        
+        /// <summary>
+        /// Cambia el estado de una orden existente.
+        /// </summary>
+        Task UpdateStatusAsync(Guid orderId, string newStatus);
+
     }
 }

@@ -30,5 +30,12 @@ namespace DSWIntegral.Models
 
         // Items del pedido
         public List<OrderItem> Items { get; set; } = new();
+        
+        /// <summary>
+        /// Estado actual de la orden. Inicialmente “Pending”.
+        /// </summary>
+        [Required]
+        public string Status { get; set; } = "Pending";
+
     }
 }
