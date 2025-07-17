@@ -60,15 +60,14 @@ var app = builder.Build();
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
 // 3) Swagger UI (solo en Development)
-if (app.Environment.IsDevelopment())
-{
+
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "DSWIntegral API V1");
         c.RoutePrefix = string.Empty; // monta UI en http://localhost:5000/
     });
-}
+
 
 // 4) Pipeline de HTTP
 
