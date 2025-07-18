@@ -7,6 +7,7 @@ using DSWIntegral.Dtos;
 using DSWIntegral.Models;
 using DSWIntegral.Middleware;
 using DSWIntegral.Services;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -85,6 +86,10 @@ builder.Services.AddCors(options =>
  builder.Services.AddInMemoryRateLimiting();
  builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
 
+ builder.Services.AddAntiforgery(options =>
+ {
+     options.HeaderName = "X-XSRF-TOKEN";
+ });
 
 // 1.5 Inyección de dependencias de servicios
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -135,11 +140,29 @@ builder.Services.AddAuthentication(options =>
         }
     };
 });
-
 builder.Services.AddAuthorization();
 
 // 2) Construir la aplicación
 var app = builder.Build();
+// (Opcional) Migrations automáticas
+using(var scope = app.Services.CreateScope())
+{
+    var ctx = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    await DbInitializer.SeedCustomersAsync(ctx, "Data/Seed/customers.json", logger);
+}
+
+app.Use(next => context =>
+{
+    var antiforgery = context.RequestServices.GetRequiredService<IAntiforgery>();
+    var tokens      = antiforgery.GetAndStoreTokens(context);
+    context.Response.Cookies.Append(
+        "XSRF-TOKEN",
+        tokens.RequestToken!,
+        new CookieOptions { HttpOnly = false }
+    );
+    return next(context);
+});
 
 // 3) Middleware
 if (app.Environment.IsDevelopment())
@@ -155,6 +178,17 @@ if (app.Environment.IsDevelopment())
 
 // 4) HTTP pipeline
 app.UseRouting();
+app.UseHsts(); // Strict-Transport-Security
+app.UseXContentTypeOptions(); // X-Content-Type-Options: nosniff
+app.UseXfo(xfo => xfo.Deny()); // X-Frame-Options: DENY
+app.UseReferrerPolicy(opts => opts.NoReferrer()); // Referrer-Policy
+app.UseCsp(opts => opts
+    .BlockAllMixedContent()
+    .StyleSources(s => s.Self())
+    .FontSources(s => s.Self())
+    .FormActions(s => s.Self())
+    .FrameAncestors(s => s.None())
+); // Content-Security-Policy
 
 app.UseCors("AllowLocalhost3000");
 app.UseIpRateLimiting();

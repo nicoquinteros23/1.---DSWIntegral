@@ -26,6 +26,7 @@
         <!-- Esenciales para validación de tokens -->
         <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.0.1" />
         <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.0.1" />
+        <PackageReference Include="NWebsec.AspNetCore.Middleware" Version="3.0.0" />
         <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.0.1" />
         <!-- Swagger UI -->
         <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.1" />

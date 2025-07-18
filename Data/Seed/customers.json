@@ -1,0 +1,16 @@
+[
+    {
+        "Name": "John Doe",
+        "Email": "johndoe@example.com",
+        "Address": "123 Main St",
+        "PasswordHash": "hashed-password",
+        "CreatedAt": "2023-11-05T00:00:00Z"
+    },
+    {
+        "Name": "Jane Smith",
+        "Email": "janesmith@example.com",
+        "Address": "456 Oak St",
+        "PasswordHash": "hashed-password",
+        "CreatedAt": "2023-11-05T00:00:00Z"
+    }
+]

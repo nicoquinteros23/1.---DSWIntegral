@@ -9,7 +9,7 @@ namespace DSWIntegral.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize]                // <-- Protege todo el controlador
+   // [Authorize]                // <-- Protege todo el controlador
     public class ProductsController : ControllerBase
     {
         private readonly AppDbContext _context;
