@@ -113,19 +113,26 @@ builder.Services.AddAuthentication(options =>
 // 2) Construir la aplicación
 var app = builder.Build();
 
-// 3) Middleware global de excepciones
-app.UseMiddleware<GlobalExceptionMiddleware>();
-
-// 4) Swagger UI solo en Development
 if (app.Environment.IsDevelopment())
 {
+    app.UseDeveloperExceptionPage();
+}
+
+
+
+// 3) Middleware global de excepciones
+//app.UseMiddleware<GlobalExceptionMiddleware>();
+
+// 4) Swagger UI solo en Development
+
+
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "DSWIntegral API V1");
         c.RoutePrefix = string.Empty; // monta UI en la raíz
     });
-}
+
 
 // 5) Pipeline HTTP
 app.UseHttpsRedirection();

@@ -1,16 +1,13 @@
-using System;
-using System.Linq;
-using System.Security.Cryptography;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Text;
-using System.Threading.Tasks;
 using DSWIntegral.Data;
 using DSWIntegral.Dtos;
 using DSWIntegral.Models;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
-using System.Collections.Generic;
 
 namespace DSWIntegral.Services
 {
@@ -18,65 +15,78 @@ namespace DSWIntegral.Services
     {
         private readonly AppDbContext _ctx;
         private readonly IConfiguration _config;
+        private readonly PasswordHasher<Customer> _hasher;
 
         public AuthService(AppDbContext ctx, IConfiguration config)
         {
             _ctx    = ctx;
             _config = config;
+            _hasher = new PasswordHasher<Customer>();
         }
 
         public async Task<AuthResponseDto> RegisterAsync(RegisterDto dto)
         {
-            if (await _ctx.Users.AnyAsync(u => u.Username == dto.Username))
-                throw new InvalidOperationException("El usuario ya existe.");
+            if (await _ctx.Customers.AnyAsync(c => c.Email == dto.Email))
+                throw new InvalidOperationException($"El email '{dto.Email}' ya existe.");
 
-            // Crear hash/salt
-            using var hmac = new HMACSHA512();
-            var user = new User
+            var customer = new Customer
             {
-                Username      = dto.Username,
-                PasswordHash  = hmac.ComputeHash(Encoding.UTF8.GetBytes(dto.Password)),
-                PasswordSalt  = hmac.Key
+                Name    = dto.Name,
+                Email   = dto.Email,
+                Address = dto.Address,
             };
+            customer.PasswordHash = _hasher.HashPassword(customer, dto.Password);
 
-            _ctx.Users.Add(user);
+            _ctx.Customers.Add(customer);
             await _ctx.SaveChangesAsync();
 
-            // Generar token
-            return CreateToken(user);
+            return GenerateToken(customer);
         }
 
-        public async Task<AuthResponseDto?> LoginAsync(LoginDto dto)
+        public async Task<AuthResponseDto> LoginAsync(LoginDto dto)
         {
-            var user = await _ctx.Users.SingleOrDefaultAsync(u => u.Username == dto.Username);
-            if (user == null) return null;
+            var customer = await _ctx.Customers
+                .SingleOrDefaultAsync(c => c.Email == dto.Email)
+                ?? throw new KeyNotFoundException("Credenciales inválidas.");
 
-            // Verificar password
-            using var hmac = new HMACSHA512(user.PasswordSalt);
-            var computed = hmac.ComputeHash(Encoding.UTF8.GetBytes(dto.Password));
-            if (!computed.SequenceEqual(user.PasswordHash))
-                return null;
+            var result = _hasher.VerifyHashedPassword(customer, customer.PasswordHash, dto.Password);
+            if (result == PasswordVerificationResult.Failed)
+                throw new KeyNotFoundException("Credenciales inválidas.");
 
-            return CreateToken(user);
+            return GenerateToken(customer);
         }
 
-        private AuthResponseDto CreateToken(User user)
+        private AuthResponseDto GenerateToken(Customer customer)
         {
-            var jwt   = _config.GetSection("Jwt");
-            var key   = Encoding.UTF8.GetBytes(jwt["Key"]!);
-            var creds = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256);
+            // Leer sección Jwt
+            var jwtSection      = _config.GetSection("Jwt");
+            var keyBytes        = Encoding.UTF8.GetBytes(jwtSection["Key"]!);
+            var issuer          = jwtSection["Issuer"]!;
+            var audience        = jwtSection["Audience"]!;
+            var expiresInMinutes = jwtSection.GetValue<int>("ExpiresInMinutes");
 
-            var expires = DateTime.UtcNow.AddMinutes(int.Parse(jwt["ExpiresInMinutes"]!));
+            // Claims
+            var claims = new[]
+            {
+                new Claim(JwtRegisteredClaimNames.Sub, customer.Id.ToString()),
+                new Claim(JwtRegisteredClaimNames.Email, customer.Email),
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            };
 
+            // Credenciales
+            var creds = new SigningCredentials(
+                new SymmetricSecurityKey(keyBytes),
+                SecurityAlgorithms.HmacSha256
+            );
+
+            // Fecha de expiración
+            var expires = DateTime.UtcNow.AddMinutes(expiresInMinutes);
+
+            // Generar token JWT
             var token = new JwtSecurityToken(
-                issuer:  jwt["Issuer"],
-                audience: jwt["Audience"],
-                claims:   new List<System.Security.Claims.Claim>
-                {
-                    new("username", user.Username),
-                    new("userid",   user.Id.ToString())
-                    // opcional: new(ClaimTypes.Role, user.Role)
-                },
+                issuer: issuer,
+                audience: audience,
+                claims: claims,
                 expires: expires,
                 signingCredentials: creds
             );

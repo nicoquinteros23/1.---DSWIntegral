@@ -9,6 +9,7 @@ namespace DSWIntegral.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _auth;
+
         public AuthController(IAuthService auth) => _auth = auth;
 
         [HttpPost("register")]
@@ -16,20 +17,29 @@ namespace DSWIntegral.Controllers
         {
             try
             {
-                var res = await _auth.RegisterAsync(dto);
-                return Ok(res);
+                var result = await _auth.RegisterAsync(dto);
+                return Ok(result);
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { ex.Message });
+                // Ya existe el email
+                return BadRequest(new { Message = ex.Message });
             }
         }
 
         [HttpPost("login")]
         public async Task<IActionResult> Login(LoginDto dto)
         {
-            var res = await _auth.LoginAsync(dto);
-            return res == null ? Unauthorized() : Ok(res);
+            try
+            {
+                var result = await _auth.LoginAsync(dto);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                // Credenciales inválidas
+                return BadRequest(new { Message = ex.Message });
+            }
         }
     }
 }
