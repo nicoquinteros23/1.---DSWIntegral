@@ -15,5 +15,6 @@ namespace DSWIntegral.Data
 
         public DbSet<Order> Orders { get; set; } = default!;
         public DbSet<OrderItem> OrderItems { get; set; } = default!;
+        public DbSet<User> Users { get; set; } 
     }
 }

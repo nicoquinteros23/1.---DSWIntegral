@@ -17,6 +17,7 @@ namespace DSWIntegral.Controllers
         }
 
         // GET: api/Products
+        
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Product>>> GetProducts()
         {
