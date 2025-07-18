@@ -11,6 +11,7 @@
 
     <ItemGroup>
         <!-- Autenticación JWT -->
+        <PackageReference Include="AspNetCoreRateLimit" Version="5.0.0" />
         <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.7" />
         <!-- EF Core -->
         <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.6" />

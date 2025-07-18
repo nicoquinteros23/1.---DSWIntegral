@@ -1,266 +1,303 @@
 # PRUEBAS.md
 
-Este documento recoge los pasos y ejemplos para probar cada funcionalidad implementada en la API **DSWIntegral**.
+Este documento muestra cómo probar cada módulo del proyecto **DSWIntegral** con ejemplos de payloads y respuestas esperadas.
 
 ---
 
-## 🚀 1. Preparación
+## 🚀 Preparación General
 
-1. Configura el entorno en **Desarrollo**:
+1. Asegúrate de tener el entorno en **Development** (opcional):
 
    ```bash
    export ASPNETCORE_ENVIRONMENT=Development
    ```
-2. Arranca la API:
+2. Ejecuta la API:
 
    ```bash
    dotnet run
    ```
-3. Asegúrate de que la base de datos está migrada y lista:
+3. Actualiza la base de datos:
 
    ```bash
    dotnet ef database update
    ```
-4. Swagger UI disponible en:
+4. Swagger UI:
 
-    * `http://localhost:5000/` (si `RoutePrefix = ""`) o
-    * `http://localhost:5000/swagger`
-
----
-
-## 📦 2. Endpoints de Productos
-
-### 2.1 GET `/api/Products`
-
-* **Descripción**: Lista todos los productos con `IsActive = true`.
-* **Comando CURL**:
-
-  ```bash
-  curl -i http://localhost:5000/api/Products
-  ```
-* **Respuesta esperada**:
-
-    * `200 OK`
-    * JSON array de productos activos:
-
-      ```json
-      [
-        {
-          "id": "...",
-          "sku": "ABC123",
-          "name": "Producto A",
-          "description": "...",
-          "currentUnitPrice": 9.99,
-          "stockQuantity": 100,
-          "isActive": true
-        },
-        // ... más elementos
-      ]
-      ```
-
-### 2.2 GET `/api/Products/{id}`
-
-* **Descripción**: Obtiene un producto por su `id`.
-* **CURL**:
-
-  ```bash
-  curl -i http://localhost:5000/api/Products/{id}
-  ```
-* **Escenarios**:
-
-    * **Existente**: `200 OK` + objeto JSON.
-    * **No encontrado**: `404 Not Found`.
-
-### 2.3 POST `/api/Products`
-
-* **Descripción**: Crea un nuevo producto.
-
-#### 2.3.1 Payload válido
-
-```bash
-curl -i -X POST http://localhost:5000/api/Products \
-  -H "Content-Type: application/json" \
-  -d '{
-      "sku": "PRU001",
-      "name": "Producto Prueba",
-      "description": "Desc",
-      "currentUnitPrice": 12.50,
-      "stockQuantity": 20,
-      "isActive": true
-    }'
-```
-
-* **Respuesta**:
-
-    * `201 Created`
-    * Cabecera `Location: /api/Products/{newId}`
-    * Body: JSON del producto con `id` asignado.
-
-#### 2.3.2 SKU duplicado
-
-```bash
-curl -i -X POST http://localhost:5000/api/Products \
-  -H "Content-Type: application/json" \
-  -d '{
-      "sku": "PRU001",
-      ...
-    }'
-```
-
-* **Respuesta**:
-
-    * `400 Bad Request`
-    * Body:
-
-      ```json
-      { "message": "El SKU 'PRU001' ya está en uso." }
-      ```
-
-#### 2.3.3 Payload inválido (DataAnnotations)
-
-```bash
-curl -i -X POST http://localhost:5000/api/Products \
-  -H "Content-Type: application/json" \
-  -d '{
-      "sku": "",
-      "name": null,
-      "currentUnitPrice": -5,
-      "stockQuantity": -1
-    }'
-```
-
-* **Respuesta**:
-
-    * `400 Bad Request`
-    * Body:
-
-      ```json
-      {
-        "title": "One or more validation errors occurred.",
-        "errors": {
-          "Sku": ["El campo SKU es obligatorio."],
-          "Name": ["El campo Name es obligatorio."],
-          "CurrentUnitPrice": ["El campo CurrentUnitPrice debe estar entre 0.01 y ..."],
-          "StockQuantity": ["El campo StockQuantity debe estar entre 0 y ..."]
-        }
-      }
-      ```
-
-### 2.4 PUT `/api/Products/{id}`
-
-* **Descripción**: Actualiza todos los campos de un producto existente.
-
-#### 2.4.1 Actualización exitosa
-
-```bash
-curl -i -X PUT http://localhost:5000/api/Products/{id} \
-  -H "Content-Type: application/json" \
-  -d '{
-      "id": "{id}",
-      "sku": "PRU002",
-      "name": "Prod Modificado",
-      "description": "Desc nueva",
-      "currentUnitPrice": 15.00,
-      "stockQuantity": 25,
-      "isActive": true
-    }'
-```
-
-* **Respuesta**:
-
-    * `204 No Content`
-
-#### 2.4.2 ID de URL vs Body distinto
-
-* **Mismo comando** con `"id"` diferente que `{id}` de la ruta.
-* **Respuesta**: `400 Bad Request` + mensaje de mismatch.
-
-#### 2.4.3 SKU en uso por otro producto
-
-* Intentar cambiar `sku` a uno que ya exista en otro registro.
-* **Respuesta**: `400 Bad Request` + `{ message: "El SKU '...' ya está en uso..." }`.
-
-### 2.5 PATCH `/api/Products/{id}`
-
-* **Descripción**: Inhabilita (`IsActive = false`) el producto.
-
-```bash
-curl -i -X PATCH http://localhost:5000/api/Products/{id}
-```
-
-* **Respuesta**: `204 No Content`
-
-* **Verificación**:
-
-    * `GET /api/Products/{id}` → `200 OK` y `"isActive": false`.
-    * `GET /api/Products` → el producto ya **no** aparece.
-
-### 2.6 DELETE `/api/Products/{id}`
-
-* **Descripción**: Elimina físicamente el registro.
-
-```bash
-curl -i -X DELETE http://localhost:5000/api/Products/{id}
-```
-
-* **Respuesta**: `204 No Content`
-
-* **Verificación**:
-
-    * `GET /api/Products/{id}` → `404 Not Found`.
+    * [http://localhost:5000/](http://localhost:5000/) (ruta raíz)
+    * o [http://localhost:5000/swagger](http://localhost:5000/swagger)
 
 ---
 
-## 🔒 3. Seguridad y errores (M2)
+## 🛠️ M1: CRUD Productos
 
-### 3.1 Middleware global de excepciones
+### GET `/api/Products`
 
-* En un endpoint (por ej. `GET /api/Products`) inserta:
+```bash
+curl -i http://localhost:5000/api/Products
+```
 
-  ```csharp
-  throw new Exception("Error de prueba");
+* **200 OK**
+* JSON array de productos con `isActive = true`.
+
+### GET `/api/Products/{id}`
+
+```bash
+curl -i http://localhost:5000/api/Products/00000000-0000-0000-0000-000000000001
+```
+
+* **200 OK** si existe
+* **404 Not Found** si no
+
+### POST `/api/Products`
+
+```bash
+curl -i -X POST http://localhost:5000/api/Products \
+  -H "Content-Type: application/json" \
+  -d '{
+        "sku": "PRU001",
+        "name": "Producto Prueba",
+        "description": "Descripción",
+        "currentUnitPrice": 9.99,
+        "stockQuantity": 100,
+        "isActive": true
+      }'
+```
+
+* **201 Created** + Location header + JSON creado.
+
+#### SKU duplicado
+
+* Repetir con `sku: "PRU001"`
+* **400 Bad Request**
+
+  ```json
+  { "message": "El SKU 'PRU001' ya está en uso." }
   ```
-* Llama vía CURL/SWAGGER:
 
-  ```bash
-  curl -i http://localhost:5000/api/Products
+#### Validación DataAnnotations
+
+* Campos vacíos o inválidos:
+
+```bash
+curl -i -X POST http://localhost:5000/api/Products \
+  -H "Content-Type: application/json" \
+  -d '{
+        "sku": "",
+        "name": null,
+        "currentUnitPrice": -1,
+        "stockQuantity": -5
+      }'
+```
+
+* **400 Bad Request** con objeto de validación (message + details).
+
+### PUT `/api/Products/{id}`
+
+```bash
+curl -i -X PUT http://localhost:5000/api/Products/00000000-0000-0000-0000-000000000001 \
+  -H "Content-Type: application/json" \
+  -d '{
+        "id": "00000000-0000-0000-0000-000000000001",
+        "sku": "PRU002",
+        "name": "Modificado",
+        "description": "Nuevo",
+        "currentUnitPrice": 15.00,
+        "stockQuantity": 50,
+        "isActive": true
+      }'
+```
+
+* **204 No Content**
+
+### PATCH `/api/Products/{id}`
+
+```bash
+curl -i -X PATCH http://localhost:5000/api/Products/00000000-0000-0000-0000-000000000001
+```
+
+* **204 No Content**
+* Luego GET, debe mostrar `isActive: false`.
+
+### DELETE `/api/Products/{id}`
+
+```bash
+curl -i -X DELETE http://localhost:5000/api/Products/00000000-0000-0000-0000-000000000001
+```
+
+* **204 No Content**
+* Luego GET → **404 Not Found**
+
+---
+
+## 🔒 M2: Middleware de Errores, CORS y Validaciones
+
+### 1) Middleware Global de Excepciones
+
+* Inserta en un controlador:
+
+```csharp
+throw new Exception("Error de prueba");
+```
+
+* Lanza:
+
+```bash
+curl -i http://localhost:5000/api/Products
+```
+
+* **500 Internal Server Error**
+
+  ```json
+  {"message":"Ocurrió un error interno.","details":"Error de prueba"}
   ```
-* **Respuesta**:
 
-    * `500 Internal Server Error`
-    * Body:
+### 2) Validación de ModelState
 
-      ```json
-      {
-        "message": "Ocurrió un error interno.",
-        "details": "Error de prueba"
-      }
-      ```
+* Enviar JSON con errores (ver M1. DataAnnotations).
+* Respuesta **400 Bad Request** con objeto `{ message, details }`.
 
-### 3.2 Pruebas de CORS
+### 3) Pruebas CORS
 
 * **Origen permitido**:
 
   ```bash
-  curl -i http://localhost:5000/api/Products \
-    -H "Origin: http://localhost:3000"
+  curl -i http://localhost:5000/api/Products -H "Origin: http://localhost:3000"
   ```
 
-    * Respuesta contiene header:
-
-      ```
-      Access-Control-Allow-Origin: http://localhost:3000
-      ```
+    * Header `Access-Control-Allow-Origin: http://localhost:3000`
 * **Origen denegado**:
 
   ```bash
-  curl -i http://localhost:5000/api/Products \
-    -H "Origin: http://evil.com"
+  curl -i http://localhost:5000/api/Products -H "Origin: http://evil.com"
   ```
 
-    * Respuesta **no** contiene `Access-Control-Allow-Origin`.
-    * En un navegador, la consola JS mostrará un error CORS.
+    * No incluye `Access-Control-Allow-Origin`
 
 ---
 
-> Con estos ejemplos tienes cubiertas todas las rutas y mecanismos de error y seguridad. Ajusta los `{id}` según tu base y reutiliza estos casos para pruebas manuales o automatizadas.
+## 👥 M3: CRUD Clientes
+
+### GET `/api/Customers`
+
+```bash
+curl -i http://localhost:5000/api/Customers
+```
+
+* **200 OK** + array de clientes.
+
+### GET `/api/Customers/{id}`
+
+```bash
+curl -i http://localhost:5000/api/Customers/11111111-1111-1111-1111-111111111111
+```
+
+* **200 OK** o **404 Not Found**.
+
+### POST `/api/Customers`
+
+```bash
+curl -i -X POST http://localhost:5000/api/Customers \
+  -H "Content-Type: application/json" \
+  -d '{
+        "name":"Juan Pérez",
+        "email":"juan@correo.com",
+        "address":"Calle Falsa 123"
+      }'
+```
+
+* **201 Created** + JSON cliente.
+
+---
+
+## 📝 M4/M5: CRUD Órdenes
+
+### GET `/api/Orders`
+
+```bash
+curl -i http://localhost:5000/api/Orders
+```
+
+* **200 OK** + array de órdenes (con items).
+
+### GET `/api/Orders/{id}`
+
+```bash
+curl -i http://localhost:5000/api/Orders/22222222-2222-2222-2222-222222222222
+```
+
+* **200 OK** o **404 Not Found**.
+
+### POST `/api/Orders`
+
+```bash
+curl -i -X POST http://localhost:5000/api/Orders \
+  -H "Content-Type: application/json" \
+  -d '{
+        "customerId":"11111111-1111-1111-1111-111111111111",
+        "items":[{ "productId":"00000000-0000-0000-0000-000000000001", "quantity":2 }]
+      }'
+```
+
+* **200 OK** + JSON de la orden con `totalAmount` calculado.
+* **400 Bad Request** si cliente/prod no existe o stock insuficiente.
+
+### DELETE `/api/Orders/{id}`
+
+```bash
+curl -i -X DELETE http://localhost:5000/api/Orders/22222222-2222-2222-2222-222222222222
+```
+
+* **204 No Content**
+
+---
+
+## 🔑 M6: Autenticación y Rutas Protegidas
+
+### POST `/api/Auth/register`
+
+```bash
+curl -i -X POST http://localhost:5000/api/Auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+        "name":"Test User",
+        "email":"test@example.com",
+        "address":"Addr",
+        "password":"P@ssw0rd"
+      }'
+```
+
+* **200 OK** + `{ token, expires }`.
+
+### POST `/api/Auth/login`
+
+```bash
+curl -i -X POST http://localhost:5000/api/Auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+        "email":"test@example.com",
+        "password":"P@ssw0rd"
+      }'
+```
+
+* **200 OK** + `{ token, expires }`.
+
+### Probar endpoints protegidos
+
+```bash
+curl -i http://localhost:5000/api/Products \
+  -H "Authorization: Bearer <TU_TOKEN>"
+```
+
+* **200 OK** con token válido.
+* **401 Unauthorized** sin token o token inválido.
+
+---
+
+> **Tip**: En Swagger UI pulsa "Authorize" e ingresa `Bearer <token>` para probar sin escribir manualmente el header.
+
+---
+
+```"
+}
+
+```

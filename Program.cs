@@ -1,6 +1,7 @@
 ﻿using System.Linq;
 using System.Text;
 using System.Text.Json;
+using AspNetCoreRateLimit;
 using DSWIntegral.Data;
 using DSWIntegral.Dtos; 
 using DSWIntegral.Models;
@@ -12,6 +13,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+
 
 
 
@@ -76,6 +78,13 @@ builder.Services.AddCors(options =>
               .AllowAnyHeader()
               .AllowAnyMethod());
 });
+
+
+ builder.Services.AddMemoryCache();
+ builder.Services.Configure<IpRateLimitOptions>(builder.Configuration.GetSection("IpRateLimiting"));
+ builder.Services.AddInMemoryRateLimiting();
+ builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
+
 
 // 1.5 Inyección de dependencias de servicios
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -148,7 +157,7 @@ if (app.Environment.IsDevelopment())
 app.UseRouting();
 
 app.UseCors("AllowLocalhost3000");
-
+app.UseIpRateLimiting();
 app.UseAuthentication();
 app.UseAuthorization();
 
