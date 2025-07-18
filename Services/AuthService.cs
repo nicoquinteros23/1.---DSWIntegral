@@ -58,14 +58,14 @@ namespace DSWIntegral.Services
 
         private AuthResponseDto GenerateToken(Customer customer)
         {
-            // Leer sección Jwt
-            var jwtSection      = _config.GetSection("Jwt");
-            var keyBytes        = Encoding.UTF8.GetBytes(jwtSection["Key"]!);
-            var issuer          = jwtSection["Issuer"]!;
-            var audience        = jwtSection["Audience"]!;
+            var jwtSection       = _config.GetSection("Jwt");
+            var keyBytes         = Encoding.UTF8.GetBytes(jwtSection["Key"]!);
+
+            // ¡LEE BIEN los campos "Issuer" y "Audience"!
+            var issuer           = jwtSection["Issuer"]!;
+            var audience         = jwtSection["Audience"]!;
             var expiresInMinutes = jwtSection.GetValue<int>("ExpiresInMinutes");
 
-            // Claims
             var claims = new[]
             {
                 new Claim(JwtRegisteredClaimNames.Sub, customer.Id.ToString()),
@@ -73,21 +73,18 @@ namespace DSWIntegral.Services
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
 
-            // Credenciales
             var creds = new SigningCredentials(
                 new SymmetricSecurityKey(keyBytes),
                 SecurityAlgorithms.HmacSha256
             );
 
-            // Fecha de expiración
             var expires = DateTime.UtcNow.AddMinutes(expiresInMinutes);
 
-            // Generar token JWT
             var token = new JwtSecurityToken(
-                issuer: issuer,
-                audience: audience,
-                claims: claims,
-                expires: expires,
+                issuer:             issuer,
+                audience:           audience,
+                claims:             claims,
+                expires:            expires,
                 signingCredentials: creds
             );
 
@@ -96,6 +93,6 @@ namespace DSWIntegral.Services
                 Token   = new JwtSecurityTokenHandler().WriteToken(token),
                 Expires = expires
             };
-        }
+        } 
     }
 }

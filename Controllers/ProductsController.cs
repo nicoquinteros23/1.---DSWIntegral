@@ -2,11 +2,14 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using DSWIntegral.Data;
 using DSWIntegral.Models;
+using Microsoft.AspNetCore.Authorization;
+
 
 namespace DSWIntegral.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]                // <-- Protege todo el controlador
     public class ProductsController : ControllerBase
     {
         private readonly AppDbContext _context;

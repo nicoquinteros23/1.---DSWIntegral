@@ -1,15 +1,22 @@
 ﻿using System.Linq;
-using System.Text.Json;
 using System.Text;
+using System.Text.Json;
 using DSWIntegral.Data;
-using DSWIntegral.Middleware;
+using DSWIntegral.Dtos; 
 using DSWIntegral.Models;
+using DSWIntegral.Middleware;
 using DSWIntegral.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+
+
+
+// Para mostrar detalles de error de JWT en consola
+IdentityModelEventSource.ShowPII = true;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,9 +25,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<AppDbContext>(opt =>
     opt.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// 1.2 Controllers + validación ModelState
-builder.Services
-    .AddControllers()
+// 1.2 Controllers + validación de ModelState
+builder.Services.AddControllers()
     .ConfigureApiBehaviorOptions(options =>
     {
         options.InvalidModelStateResponseFactory = context =>
@@ -42,7 +48,7 @@ builder.Services
         };
     });
 
-// 1.3 Swagger / OpenAPI con JWT support
+// 1.3 Swagger / OpenAPI con JWT
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -58,36 +64,26 @@ builder.Services.AddSwaggerGen(c =>
     });
     c.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
-        [new OpenApiSecurityScheme
-        {
-            Reference = new OpenApiReference
-            {
-                Type = ReferenceType.SecurityScheme,
-                Id = "Bearer"
-            }
-        }] = Array.Empty<string>()
+        [ new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } } ] = Array.Empty<string>()
     });
 });
 
-// 1.4 CORS: permitir frontend en localhost:3000
+// 1.4 CORS: permitir frontend localhost:3000
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowLocalhost3000", policy =>
-    {
-        policy
-            .WithOrigins("http://localhost:3000")
-            .AllowAnyHeader()
-            .AllowAnyMethod();
-    });
+        policy.WithOrigins("http://localhost:3000")
+              .AllowAnyHeader()
+              .AllowAnyMethod());
 });
 
-// 1.5 DI de servicios de dominio
-builder.Services.AddScoped<IOrderService, OrderService>();
+// 1.5 Inyección de dependencias de servicios
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IOrderService, OrderService>();
 
-// 1.6 JWT Authentication
-var jwtSettings = builder.Configuration.GetSection("Jwt");
-var key = Encoding.UTF8.GetBytes(jwtSettings["Key"]!);
+// 1.6 Autenticación JWT
+var jwtSection = builder.Configuration.GetSection("Jwt");
+var keyBytes = Encoding.UTF8.GetBytes(jwtSection["Key"]!);
 
 builder.Services.AddAuthentication(options =>
 {
@@ -101,43 +97,61 @@ builder.Services.AddAuthentication(options =>
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(key),
-        ValidateIssuer = true,
-        ValidIssuer = jwtSettings["Issuer"],
-        ValidateAudience = true,
-        ValidAudience = jwtSettings["Audience"],
+        IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
+        ValidateIssuer = false,
+        ValidIssuer = jwtSection["Issuer"],
+        ValidateAudience = false,
+        ValidAudience = jwtSection["Audience"],
         ValidateLifetime = true
     };
+    options.Events = new JwtBearerEvents
+    {
+        OnAuthenticationFailed = ctx =>
+        {
+            Console.WriteLine("JWT failed: " + ctx.Exception.Message);
+            return Task.CompletedTask;
+        }
+    };
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = ctx =>
+        {
+            Console.WriteLine("RAW AUTH HEADER: " + ctx.Request.Headers["Authorization"]);
+            return Task.CompletedTask;
+        },
+        OnAuthenticationFailed = ctx =>
+        {
+            Console.WriteLine("JWT failed: " + ctx.Exception); // ya lo tienes
+            return Task.CompletedTask;
+        }
+    };
 });
+
+builder.Services.AddAuthorization();
 
 // 2) Construir la aplicación
 var app = builder.Build();
 
+// 3) Middleware
 if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
-}
-
-
-
-// 3) Middleware global de excepciones
-//app.UseMiddleware<GlobalExceptionMiddleware>();
-
-// 4) Swagger UI solo en Development
-
-
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "DSWIntegral API V1");
-        c.RoutePrefix = string.Empty; // monta UI en la raíz
+        c.RoutePrefix = string.Empty;
     });
+}
 
+// 4) HTTP pipeline
+app.UseRouting();
 
-// 5) Pipeline HTTP
-app.UseHttpsRedirection();
 app.UseCors("AllowLocalhost3000");
+
 app.UseAuthentication();
 app.UseAuthorization();
+
 app.MapControllers();
+
 app.Run();

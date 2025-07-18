@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using DSWIntegral.Dtos;
 using DSWIntegral.Services;
+using Microsoft.AspNetCore.Authorization;
 
 namespace DSWIntegral.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [AllowAnonymous]
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _auth;
