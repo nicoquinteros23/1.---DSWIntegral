@@ -2,43 +2,45 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Authorization;
-using DSWIntegral.Data;
+using DSWIntegral.Services;
+using DSWIntegral.Dtos;
 using DSWIntegral.Models;
 
 namespace DSWIntegral.Controllers
 {
     /// <summary>
-    /// Gestión de clientes. Solo administradores pueden usar estos endpoints.
+    /// Gestiona las órdenes de los clientes.
     /// </summary>
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Policy = "AdminOnly")]
-    public class CustomersController : ControllerBase
+    [Authorize(Policy = "CustomerOnly")]
+    public class OrdersController : ControllerBase
     {
-        private readonly AppDbContext _context;
-        public CustomersController(AppDbContext context) => _context = context;
+        private readonly IOrderService _orderService;
+        public OrdersController(IOrderService orderService) 
+            => _orderService = orderService;
 
         /// <summary>
-        /// Lista todos los clientes.
+        /// Lista todas las órdenes del cliente autenticado.
         /// </summary>
-        /// <returns>Lista de <see cref="Customer"/>.</returns>
-        /// <response code="200">OK. Devuelve todos los clientes.</response>
+        /// <returns>Colección de <see cref="OrderResponseDto"/>.</returns>
+        /// <response code="200">OK. Devuelve la lista de órdenes.</response>
         /// <response code="401">Unauthorized. No autenticado.</response>
         /// <response code="403">Forbidden. Sin permisos.</response>
         /// <response code="500">Internal Server Error. Error inesperado.</response>
         [HttpGet]
-        [ProducesResponseType(typeof(IEnumerable<Customer>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(IEnumerable<OrderResponseDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<ActionResult<IEnumerable<Customer>>> GetCustomers()
+        public async Task<ActionResult<IEnumerable<OrderResponseDto>>> GetOrders()
         {
             try
             {
-                var list = await _context.Customers.ToListAsync();
-                return Ok(list);
+                var orders = await _orderService.GetAllAsync();
+                return Ok(orders);
             }
             catch (Exception ex)
             {
@@ -51,28 +53,28 @@ namespace DSWIntegral.Controllers
         }
 
         /// <summary>
-        /// Obtiene un cliente por su ID.
+        /// Obtiene una orden por su identificador.
         /// </summary>
-        /// <param name="id">GUID del cliente.</param>
-        /// <returns><see cref="Customer"/> solicitado.</returns>
-        /// <response code="200">OK. Devuelve el cliente.</response>
-        /// <response code="404">Not Found. Cliente no existe.</response>
+        /// <param name="id">GUID de la orden.</param>
+        /// <returns><see cref="OrderResponseDto"/> solicitado.</returns>
+        /// <response code="200">OK. Devuelve la orden.</response>
+        /// <response code="404">Not Found. Orden no existe.</response>
         /// <response code="401">Unauthorized. No autenticado.</response>
         /// <response code="403">Forbidden. Sin permisos.</response>
         /// <response code="500">Internal Server Error. Error inesperado.</response>
         [HttpGet("{id}")]
-        [ProducesResponseType(typeof(Customer), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(OrderResponseDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<ActionResult<Customer>> GetCustomer(Guid id)
+        public async Task<ActionResult<OrderResponseDto>> GetOrder(Guid id)
         {
             try
             {
-                var customer = await _context.Customers.FindAsync(id);
-                if (customer == null) return NotFound();
-                return Ok(customer);
+                var order = await _orderService.GetByIdAsync(id);
+                if (order == null) return NotFound();
+                return Ok(order);
             }
             catch (Exception ex)
             {
@@ -85,38 +87,35 @@ namespace DSWIntegral.Controllers
         }
 
         /// <summary>
-        /// Crea un nuevo cliente.
+        /// Crea una nueva orden.
         /// </summary>
-        /// <param name="customer">Datos del cliente a crear.</param>
-        /// <returns>Cliente creado.</returns>
-        /// <response code="201">Created. Cliente creado correctamente.</response>
-        /// <response code="400">Bad Request. Email duplicado o datos inválidos.</response>
+        /// <param name="dto"><see cref="CreateOrderDto"/> con datos de la orden.</param>
+        /// <returns>Orden creada.</returns>
+        /// <response code="201">Created. Orden creada correctamente.</response>
+        /// <response code="400">Bad Request. Datos inválidos o recurso inexistente.</response>
         /// <response code="401">Unauthorized. No autenticado.</response>
         /// <response code="403">Forbidden. Sin permisos.</response>
         /// <response code="500">Internal Server Error. Error inesperado.</response>
         [HttpPost]
-        [ProducesResponseType(typeof(Customer), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(OrderResponseDto), StatusCodes.Status201Created)]
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<ActionResult<Customer>> CreateCustomer([FromBody] Customer customer)
+        public async Task<ActionResult<OrderResponseDto>> CreateOrder([FromBody] CreateOrderDto dto)
         {
             try
             {
-                if (await _context.Customers.AnyAsync(c => c.Email == customer.Email))
-                    return BadRequest(new ErrorResponse { Message = $"El email '{customer.Email}' ya existe." });
-
-                _context.Customers.Add(customer);
-                await _context.SaveChangesAsync();
-                return CreatedAtAction(nameof(GetCustomer), new { id = customer.Id }, customer);
+                var created = await _orderService.CreateOrderAsync(dto);
+                return CreatedAtAction(nameof(GetOrder), new { id = created.Id }, created);
             }
-            catch (DbUpdateException dbex)
+            catch (KeyNotFoundException knf)
             {
-                return BadRequest(new ErrorResponse {
-                    Message = "Error al guardar el cliente.",
-                    Details = dbex.Message
-                });
+                return BadRequest(new ErrorResponse { Message = knf.Message });
+            }
+            catch (InvalidOperationException inv)
+            {
+                return BadRequest(new ErrorResponse { Message = inv.Message });
             }
             catch (Exception ex)
             {
@@ -129,67 +128,11 @@ namespace DSWIntegral.Controllers
         }
 
         /// <summary>
-        /// Actualiza un cliente existente.
+        /// Elimina una orden existente, devolviendo stock si corresponde.
         /// </summary>
-        /// <param name="id">GUID del cliente.</param>
-        /// <param name="updated">Datos a actualizar.</param>
-        /// <response code="204">No Content. Actualización exitosa.</response>
-        /// <response code="400">Bad Request. ID no coincide o email duplicado.</response>
-        /// <response code="404">Not Found. Cliente no existe.</response>
-        /// <response code="401">Unauthorized. No autenticado.</response>
-        /// <response code="403">Forbidden. Sin permisos.</response>
-        /// <response code="500">Internal Server Error. Error inesperado.</response>
-        [HttpPut("{id}")]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> UpdateCustomer(Guid id, [FromBody] Customer updated)
-        {
-            try
-            {
-                if (id != updated.Id)
-                    return BadRequest(new ErrorResponse { Message = "El ID de la URL no coincide con el ID del cliente." });
-
-                if (await _context.Customers
-                        .AnyAsync(c => c.Email == updated.Email && c.Id != id))
-                    return BadRequest(new ErrorResponse { Message = $"El email '{updated.Email}' ya está en uso." });
-
-                _context.Entry(updated).State = EntityState.Modified;
-                await _context.SaveChangesAsync();
-                return NoContent();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!await _context.Customers.AnyAsync(c => c.Id == id))
-                    return NotFound();
-                throw;
-            }
-            catch (DbUpdateException dbex)
-            {
-                return BadRequest(new ErrorResponse {
-                    Message = "Error al actualizar el cliente.",
-                    Details = dbex.Message
-                });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(StatusCodes.Status500InternalServerError,
-                    new ErrorResponse {
-                        Message = "Ocurrió un error interno.",
-                        Details = ex.Message
-                    });
-            }
-        }
-
-        /// <summary>
-        /// Elimina un cliente.
-        /// </summary>
-        /// <param name="id">GUID del cliente a eliminar.</param>
+        /// <param name="id">GUID de la orden a eliminar.</param>
         /// <response code="204">No Content. Eliminación exitosa.</response>
-        /// <response code="404">Not Found. Cliente no existe.</response>
+        /// <response code="404">Not Found. Orden no existe.</response>
         /// <response code="401">Unauthorized. No autenticado.</response>
         /// <response code="403">Forbidden. Sin permisos.</response>
         /// <response code="500">Internal Server Error. Error inesperado.</response>
@@ -199,16 +142,59 @@ namespace DSWIntegral.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> DeleteCustomer(Guid id)
+        public async Task<IActionResult> DeleteOrder(Guid id)
         {
             try
             {
-                var cust = await _context.Customers.FindAsync(id);
-                if (cust == null) return NotFound();
-
-                _context.Customers.Remove(cust);
-                await _context.SaveChangesAsync();
+                await _orderService.DeleteAsync(id);
                 return NoContent();
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    new ErrorResponse {
+                        Message = "Ocurrió un error interno.",
+                        Details = ex.Message
+                    });
+            }
+        }
+
+        /// <summary>
+        /// Actualiza el estado de una orden.
+        /// </summary>
+        /// <param name="id">GUID de la orden.</param>
+        /// <param name="dto"><see cref="UpdateOrderStatusDto"/> con el nuevo estado.</param>
+        /// <response code="204">No Content. Estado actualizado.</response>
+        /// <response code="400">Bad Request. Estado inválido.</response>
+        /// <response code="404">Not Found. Orden no existe.</response>
+        /// <response code="401">Unauthorized. No autenticado.</response>
+        /// <response code="403">Forbidden. Sin permisos.</response>
+        /// <response code="500">Internal Server Error. Error inesperado.</response>
+        [HttpPut("{id}/status")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateOrderStatusDto dto)
+        {
+            try
+            {
+                await _orderService.UpdateStatusAsync(id, dto.NewStatus);
+                return NoContent();
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound();
+            }
+            catch (InvalidOperationException inv)
+            {
+                return BadRequest(new ErrorResponse { Message = inv.Message });
             }
             catch (Exception ex)
             {
