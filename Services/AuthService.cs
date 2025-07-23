@@ -24,6 +24,7 @@ namespace DSWIntegral.Services
             _hasher = new PasswordHasher<Customer>();
         }
 
+        // Services/AuthService.cs (método RegisterAsync)
         public async Task<AuthResponseDto> RegisterAsync(RegisterDto dto)
         {
             if (await _ctx.Customers.AnyAsync(c => c.Email == dto.Email))
@@ -34,9 +35,10 @@ namespace DSWIntegral.Services
                 Name    = dto.Name,
                 Email   = dto.Email,
                 Address = dto.Address,
+                Role    = dto.Role ?? "Customer"    // ← Asigna rol
             };
-            customer.PasswordHash = _hasher.HashPassword(customer, dto.Password);
 
+            customer.PasswordHash = _hasher.HashPassword(customer, dto.Password);
             _ctx.Customers.Add(customer);
             await _ctx.SaveChangesAsync();
 
@@ -56,20 +58,21 @@ namespace DSWIntegral.Services
             return GenerateToken(customer);
         }
 
+        // Services/AuthService.cs (método GenerateToken)
         private AuthResponseDto GenerateToken(Customer customer)
         {
             var jwtSection       = _config.GetSection("Jwt");
             var keyBytes         = Encoding.UTF8.GetBytes(jwtSection["Key"]!);
-
-            // ¡LEE BIEN los campos "Issuer" y "Audience"!
             var issuer           = jwtSection["Issuer"]!;
             var audience         = jwtSection["Audience"]!;
             var expiresInMinutes = jwtSection.GetValue<int>("ExpiresInMinutes");
 
+            // Aquí añadimos la claim de Role
             var claims = new[]
             {
                 new Claim(JwtRegisteredClaimNames.Sub, customer.Id.ToString()),
                 new Claim(JwtRegisteredClaimNames.Email, customer.Email),
+                new Claim(ClaimTypes.Role, customer.Role),   // ← Role claim
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
 
@@ -88,8 +91,7 @@ namespace DSWIntegral.Services
                 signingCredentials: creds
             );
 
-            return new AuthResponseDto
-            {
+            return new AuthResponseDto {
                 Token   = new JwtSecurityTokenHandler().WriteToken(token),
                 Expires = expires
             };

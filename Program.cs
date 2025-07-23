@@ -1,4 +1,5 @@
 ﻿using System.Linq;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using AspNetCoreRateLimit;
@@ -13,9 +14,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-
-
-
 
 // Para mostrar detalles de error de JWT en consola
 IdentityModelEventSource.ShowPII = true;
@@ -68,6 +66,9 @@ builder.Services.AddSwaggerGen(c =>
     {
         [ new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } } ] = Array.Empty<string>()
     });
+    var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    c.IncludeXmlComments(xmlPath);
 });
 
 // 1.4 CORS: permitir frontend localhost:3000
@@ -79,64 +80,63 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod());
 });
 
+// 1.5 Rate Limiting
+builder.Services.AddMemoryCache();
+builder.Services.Configure<IpRateLimitOptions>(builder.Configuration.GetSection("IpRateLimiting"));
+builder.Services.AddInMemoryRateLimiting();
+builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
 
- builder.Services.AddMemoryCache();
- builder.Services.Configure<IpRateLimitOptions>(builder.Configuration.GetSection("IpRateLimiting"));
- builder.Services.AddInMemoryRateLimiting();
- builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
-
-
-// 1.5 Inyección de dependencias de servicios
+// 1.6 Inyección de dependencias de servicios
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 
-// 1.6 Autenticación JWT
+// 1.7 JWT Authentication + Authorization Policies
 var jwtSection = builder.Configuration.GetSection("Jwt");
-var keyBytes = Encoding.UTF8.GetBytes(jwtSection["Key"]!);
+var keyBytes   = Encoding.UTF8.GetBytes(jwtSection["Key"]!);
 
-builder.Services.AddAuthentication(options =>
+builder.Services
+    .AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme    = JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(options =>
+    {
+        options.RequireHttpsMetadata = false;
+        options.SaveToken            = true;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey         = new SymmetricSecurityKey(keyBytes),
+            ValidateIssuer           = false, // ajustar si quieres forzar issuer
+            ValidIssuer              = jwtSection["Issuer"],
+            ValidateAudience         = false, // ajustar si quieres forzar audience
+            ValidAudience            = jwtSection["Audience"],
+            ValidateLifetime         = true,
+            RoleClaimType            = ClaimTypes.Role
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = ctx =>
+            {
+                Console.WriteLine("RAW AUTH HEADER: " + ctx.Request.Headers["Authorization"]);
+                return Task.CompletedTask;
+            },
+            OnAuthenticationFailed = ctx =>
+            {
+                Console.WriteLine("JWT failed: " + ctx.Exception);
+                return Task.CompletedTask;
+            }
+        };
+    });
+
+builder.Services.AddAuthorization(options =>
 {
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(options =>
-{
-    options.RequireHttpsMetadata = false;
-    options.SaveToken = true;
-    options.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
-        ValidateIssuer = false,
-        ValidIssuer = jwtSection["Issuer"],
-        ValidateAudience = false,
-        ValidAudience = jwtSection["Audience"],
-        ValidateLifetime = true
-    };
-    options.Events = new JwtBearerEvents
-    {
-        OnAuthenticationFailed = ctx =>
-        {
-            Console.WriteLine("JWT failed: " + ctx.Exception.Message);
-            return Task.CompletedTask;
-        }
-    };
-    options.Events = new JwtBearerEvents
-    {
-        OnMessageReceived = ctx =>
-        {
-            Console.WriteLine("RAW AUTH HEADER: " + ctx.Request.Headers["Authorization"]);
-            return Task.CompletedTask;
-        },
-        OnAuthenticationFailed = ctx =>
-        {
-            Console.WriteLine("JWT failed: " + ctx.Exception); // ya lo tienes
-            return Task.CompletedTask;
-        }
-    };
+    options.AddPolicy("AdminOnly", policy =>
+        policy.RequireRole("Admin"));
+    options.AddPolicy("CustomerOnly", policy =>
+        policy.RequireRole("Customer"));
 });
-
-builder.Services.AddAuthorization();
 
 // 2) Construir la aplicación
 var app = builder.Build();
@@ -153,14 +153,12 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-// 4) HTTP pipeline
+// 4) Pipeline HTTP
 app.UseRouting();
-
 app.UseCors("AllowLocalhost3000");
 app.UseIpRateLimiting();
 app.UseAuthentication();
 app.UseAuthorization();
-
 app.MapControllers();
 
 app.Run();

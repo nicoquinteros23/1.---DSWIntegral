@@ -7,6 +7,8 @@
         <Nullable>enable</Nullable>
         <!-- Evitar convertir advertencias en errores para restaurar paquetes -->
         <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <NoWarn>$(NoWarn);1591</NoWarn>    <!-- opcional, para silenciar faltantes de doc -->
     </PropertyGroup>
 
     <ItemGroup>

@@ -1,115 +1,226 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using DSWIntegral.Data;
 using DSWIntegral.Models;
-using Microsoft.AspNetCore.Authorization;
-
 
 namespace DSWIntegral.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize]                // <-- Protege todo el controlador
     public class ProductsController : ControllerBase
     {
         private readonly AppDbContext _context;
+        public ProductsController(AppDbContext context) => _context = context;
 
-        public ProductsController(AppDbContext context)
-        {
-            _context = context;
-        }
-
-        // GET: api/Products
-        
+        /// <summary>
+        /// Lista todos los productos activos.
+        /// </summary>
+        /// <returns>Colección de productos activos.</returns>
+        /// <response code="200">Retorna la lista de productos.</response>
+        /// <response code="500">Error interno del servidor.</response>
         [HttpGet]
+        [AllowAnonymous]
+        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IEnumerable<Product>))]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError, Type = typeof(ErrorResponse))]
         public async Task<ActionResult<IEnumerable<Product>>> GetProducts()
         {
-            //if (true) throw new Exception("¡Prueba de excepción! TEST 2");
-            
-            return await _context.Products
-                .Where(p => p.IsActive)
-                .ToListAsync();
+            try
+            {
+                var products = await _context.Products.Where(p => p.IsActive).ToListAsync();
+                return Ok(products);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    new ErrorResponse { Message = "Error interno.", Details = ex.Message });
+            }
         }
-          
- 
-                
 
-
-        // GET: api/Products/{id}
+        /// <summary>
+        /// Obtiene un producto por su identificador.
+        /// </summary>
+        /// <param name="id">ID del producto.</param>
+        /// <returns>Objeto del producto.</returns>
+        /// <response code="200">Producto encontrado.</response>
+        /// <response code="404">Producto no hallado.</response>
+        /// <response code="500">Error interno del servidor.</response>
         [HttpGet("{id}")]
+        [AllowAnonymous]
+        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(Product))]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError, Type = typeof(ErrorResponse))]
         public async Task<ActionResult<Product>> GetProduct(Guid id)
         {
-            var product = await _context.Products.FindAsync(id);
-            if (product == null) return NotFound();
-            return product;
+            try
+            {
+                var product = await _context.Products.FindAsync(id);
+                if (product == null)
+                    return NotFound();
+                return Ok(product);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    new ErrorResponse { Message = "Error interno.", Details = ex.Message });
+            }
         }
 
-        // POST: api/Products
+        /// <summary>
+        /// Crea un nuevo producto (solo Admin).
+        /// </summary>
+        /// <param name="product">Datos del producto a crear.</param>
+        /// <returns>El producto creado.</returns>
+        /// <response code="201">Producto creado exitosamente.</response>
+        /// <response code="400">Solicitud inválida o SKU duplicado.</response>
+        /// <response code="401">No autenticado.</response>
+        /// <response code="403">Sin permiso (Admin requerido).</response>
+        /// <response code="500">Error interno del servidor.</response>
         [HttpPost]
+        [Authorize(Policy = "AdminOnly")]
+        [ProducesResponseType(StatusCodes.Status201Created, Type = typeof(Product))]
+        [ProducesResponseType(StatusCodes.Status400BadRequest, Type = typeof(ErrorResponse))]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError, Type = typeof(ErrorResponse))]
         public async Task<ActionResult<Product>> CreateProduct(Product product)
         {
-            // Validación SKU único
-            if (await _context.Products.AnyAsync(p => p.SKU == product.SKU))
+            try
             {
-                return BadRequest(new { Message = $"El SKU '{product.SKU}' ya está en uso." });
+                if (await _context.Products.AnyAsync(p => p.SKU == product.SKU))
+                    return BadRequest(new ErrorResponse { Message = $"El SKU '{product.SKU}' ya está en uso.", Details = null });
+
+                _context.Products.Add(product);
+                await _context.SaveChangesAsync();
+
+                return CreatedAtAction(nameof(GetProduct), new { id = product.Id }, product);
             }
-
-            _context.Products.Add(product);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetProduct), new { id = product.Id }, product);
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    new ErrorResponse { Message = "Error interno.", Details = ex.Message });
+            }
         }
 
-        // PUT: api/Products/{id}
+        /// <summary>
+        /// Actualiza todos los campos de un producto (solo Admin).
+        /// </summary>
+        /// <param name="id">ID del producto.</param>
+        /// <param name="updatedProduct">Datos actualizados.</param>
+        /// <response code="204">Actualización exitosa.</response>
+        /// <response code="400">Solicitud inválida (ID mismatch o SKU duplicado).</response>
+        /// <response code="404">Producto no encontrado.</response>
+        /// <response code="401">No autenticado.</response>
+        /// <response code="403">Sin permiso (Admin requerido).</response>
+        /// <response code="500">Error interno del servidor.</response>
         [HttpPut("{id}")]
+        [Authorize(Policy = "AdminOnly")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest, Type = typeof(ErrorResponse))]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError, Type = typeof(ErrorResponse))]
         public async Task<IActionResult> UpdateProduct(Guid id, Product updatedProduct)
         {
             if (id != updatedProduct.Id)
-                return BadRequest("El ID de la URL no coincide con el ID del producto.");
+                return BadRequest(new ErrorResponse { Message = "ID de ruta y body no coinciden.", Details = null });
 
-            // Validación SKU único (excluye el mismo registro)
             if (await _context.Products.AnyAsync(p => p.SKU == updatedProduct.SKU && p.Id != id))
-            {
-                return BadRequest(new { Message = $"El SKU '{updatedProduct.SKU}' ya está en uso por otro producto." });
-            }
+                return BadRequest(new ErrorResponse { Message = $"El SKU '{updatedProduct.SKU}' ya está en uso.", Details = null });
 
             _context.Entry(updatedProduct).State = EntityState.Modified;
             try
             {
                 await _context.SaveChangesAsync();
+                return NoContent();
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (! _context.Products.Any(p => p.Id == id))
+                if (!await _context.Products.AnyAsync(p => p.Id == id))
                     return NotFound();
                 throw;
             }
-
-            return NoContent();
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    new ErrorResponse { Message = "Error interno.", Details = ex.Message });
+            }
         }
 
-        // PATCH: api/Products/{id}
+        /// <summary>
+        /// Desactiva un producto (solo Admin).
+        /// </summary>
+        /// <param name="id">ID del producto.</param>
+        /// <response code="204">Producto desactivado.</response>
+        /// <response code="404">Producto no encontrado.</response>
+        /// <response code="401">No autenticado.</response>
+        /// <response code="403">Sin permiso (Admin requerido).</response>
+        /// <response code="500">Error interno del servidor.</response>
         [HttpPatch("{id}")]
+        [Authorize(Policy = "AdminOnly")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError, Type = typeof(ErrorResponse))]
         public async Task<IActionResult> PatchProduct(Guid id)
         {
-            var product = await _context.Products.FindAsync(id);
-            if (product == null) return NotFound();
+            try
+            {
+                var product = await _context.Products.FindAsync(id);
+                if (product == null)
+                    return NotFound();
 
-            product.IsActive = false;
-            await _context.SaveChangesAsync();
-            return NoContent();
+                product.IsActive = false;
+                await _context.SaveChangesAsync();
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    new ErrorResponse { Message = "Error interno.", Details = ex.Message });
+            }
         }
 
-        // DELETE: api/Products/{id}
+        /// <summary>
+        /// Elimina físicamente un producto (solo Admin).
+        /// </summary>
+        /// <param name="id">ID del producto.</param>
+        /// <response code="204">Producto eliminado.</response>
+        /// <response code="404">Producto no encontrado.</response>
+        /// <response code="401">No autenticado.</response>
+        /// <response code="403">Sin permiso (Admin requerido).</response>
+        /// <response code="500">Error interno del servidor.</response>
         [HttpDelete("{id}")]
+        [Authorize(Policy = "AdminOnly")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError, Type = typeof(ErrorResponse))]
         public async Task<IActionResult> DeleteProduct(Guid id)
         {
-            var product = await _context.Products.FindAsync(id);
-            if (product == null) return NotFound();
+            try
+            {
+                var product = await _context.Products.FindAsync(id);
+                if (product == null)
+                    return NotFound();
 
-            _context.Products.Remove(product);
-            await _context.SaveChangesAsync();
-            return NoContent();
+                _context.Products.Remove(product);
+                await _context.SaveChangesAsync();
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    new ErrorResponse { Message = "Error interno.", Details = ex.Message });
+            }
         }
     }
 }
