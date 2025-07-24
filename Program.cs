@@ -14,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using DSWIntegral.Data.Seed;
 
 // Para mostrar detalles de error de JWT en consola
 IdentityModelEventSource.ShowPII = true;
@@ -159,6 +160,19 @@ app.UseCors("AllowLocalhost3000");
 app.UseIpRateLimiting();
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapControllers();
 
+
+
+
+
+// tras builder.Build();
+using (var scope = app.Services.CreateScope())
+{
+    var ctx = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var path = Path.Combine(app.Environment.ContentRootPath, "Data/Seed/customers.json");
+    await DbInitializer.SeedCustomersAsync(ctx, path);
+}
+
+app.MapControllers();
 app.Run();
+
