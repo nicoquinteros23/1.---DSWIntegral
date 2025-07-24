@@ -56,32 +56,6 @@ namespace DSWIntegral.Migrations
                     b.ToTable("Customers");
                 });
 
-            modelBuilder.Entity("DSWIntegral.Models.Order", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("CustomerId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("OrderDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<decimal>("TotalAmount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CustomerId");
-
-                    b.ToTable("Orders");
-                });
-
             modelBuilder.Entity("DSWIntegral.Models.OrderItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -166,20 +140,45 @@ namespace DSWIntegral.Migrations
                     b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("DSWIntegral.Models.Order", b =>
+            modelBuilder.Entity("Order", b =>
                 {
-                    b.HasOne("DSWIntegral.Models.Customer", "Customer")
-                        .WithMany()
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
 
-                    b.Navigation("Customer");
+                    b.Property<string>("BillingAddress")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("OrderDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ShippingAddress")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.ToTable("Orders");
                 });
 
             modelBuilder.Entity("DSWIntegral.Models.OrderItem", b =>
                 {
-                    b.HasOne("DSWIntegral.Models.Order", "Order")
+                    b.HasOne("Order", "Order")
                         .WithMany("Items")
                         .HasForeignKey("OrderId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -196,7 +195,18 @@ namespace DSWIntegral.Migrations
                     b.Navigation("Product");
                 });
 
-            modelBuilder.Entity("DSWIntegral.Models.Order", b =>
+            modelBuilder.Entity("Order", b =>
+                {
+                    b.HasOne("DSWIntegral.Models.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("Order", b =>
                 {
                     b.Navigation("Items");
                 });
