@@ -16,20 +16,21 @@ namespace DSWIntegral.Services
 
         public async Task<OrderResponseDto> CreateOrderAsync(CreateOrderDto dto)
         {
-            // 1) Validar cliente existencia
+            // Validar cliente existencia
             var customer = await _ctx.Customers.FindAsync(dto.CustomerId)
                 ?? throw new KeyNotFoundException($"Customer {dto.CustomerId} no existe.");
 
-            // 2) Instanciar orden con estado inicial
+            // Instanciar orden con direcciones
             var order = new Order
             {
-                CustomerId  = dto.CustomerId,
-                OrderDate   = DateTime.UtcNow,
-                Status      = "Pending",
-                Items       = new List<OrderItem>()
+                CustomerId      = dto.CustomerId,
+                OrderDate       = DateTime.UtcNow,
+                ShippingAddress = dto.ShippingAddress,
+                BillingAddress  = dto.BillingAddress,
+                Items           = new List<OrderItem>()
             };
 
-            // 3) Procesar cada item: validar producto, stock y asignar precio
+            // Procesar items
             foreach (var itemDto in dto.Items)
             {
                 var product = await _ctx.Products.FindAsync(itemDto.ProductId)
@@ -48,14 +49,11 @@ namespace DSWIntegral.Services
                 order.Items.Add(item);
             }
 
-            // 4) Calcular total de la orden
+            // Calcular total
             order.TotalAmount = order.Items.Sum(i => i.UnitPrice * i.Quantity);
-
-            // 5) Persistir cambios
             _ctx.Orders.Add(order);
             await _ctx.SaveChangesAsync();
 
-            // 6) Devolver DTO de respuesta
             return MapToDto(order);
         }
 
@@ -74,6 +72,25 @@ namespace DSWIntegral.Services
                 .FirstOrDefaultAsync(o => o.Id == id);
             return order is null ? null : MapToDto(order);
         }
+        
+        public async Task<IEnumerable<OrderResponseDto>> GetByStatusAsync(string status)
+        {
+            var orders = await _ctx.Orders
+                .Where(o => o.Status == status)
+                .Include(o => o.Items).ThenInclude(i => i.Product)
+                .ToListAsync();
+            return orders.Select(MapToDto);
+        }
+
+        // Nuevo método para cumplir la interfaz
+        public async Task<IEnumerable<OrderResponseDto>> GetByCustomerAsync(Guid customerId)
+        {
+            var orders = await _ctx.Orders
+                .Where(o => o.CustomerId == customerId)
+                .Include(o => o.Items).ThenInclude(i => i.Product)
+                .ToListAsync();
+            return orders.Select(MapToDto);
+        }
 
         public async Task DeleteAsync(Guid id)
         {
@@ -83,7 +100,7 @@ namespace DSWIntegral.Services
             if (order == null)
                 throw new KeyNotFoundException($"Order {id} no existe.");
 
-            // (Opcional) Restaurar stock si corresponde
+            // Restaurar stock
             foreach (var item in order.Items)
             {
                 var product = await _ctx.Products.FindAsync(item.ProductId);
@@ -98,14 +115,12 @@ namespace DSWIntegral.Services
         public async Task UpdateStatusAsync(Guid orderId, string newStatus)
         {
             var order = await _ctx.Orders.FindAsync(orderId)
-                ?? throw new KeyNotFoundException($"Order {orderId} no encontrada.");
+                        ?? throw new KeyNotFoundException($"Order {orderId} no encontrada.");
 
-            // Validar estado válido
             var allowed = new[] { "Pending", "Processing", "Completed", "Cancelled" };
             if (!allowed.Contains(newStatus))
-                throw new InvalidOperationException($"Estado '{newStatus}' no válido.");
+                throw new InvalidOperationException($"Estado '{newStatus}' no válido. Debe ser uno de: {string.Join(", ", allowed)}.");
 
-            // Evitar retrocesos/imposibles
             if (order.Status == "Completed" || order.Status == "Cancelled")
                 throw new InvalidOperationException($"No se puede cambiar el estado desde '{order.Status}'.");
 
@@ -115,12 +130,14 @@ namespace DSWIntegral.Services
 
         private static OrderResponseDto MapToDto(Order order) => new()
         {
-            Id          = order.Id,
-            CustomerId  = order.CustomerId,
-            OrderDate   = order.OrderDate,
-            Status      = order.Status,
-            TotalAmount = order.TotalAmount,
-            Items       = order.Items.Select(i => new OrderItemResponseDto
+            Id               = order.Id,
+            CustomerId       = order.CustomerId,
+            OrderDate        = order.OrderDate,
+            Status           = order.Status,
+            ShippingAddress  = order.ShippingAddress,
+            BillingAddress   = order.BillingAddress,
+            TotalAmount      = order.TotalAmount,
+            Items            = order.Items.Select(i => new OrderItemResponseDto
             {
                 ProductId   = i.ProductId,
                 ProductName = i.Product!.Name,

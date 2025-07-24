@@ -1,8 +1,10 @@
-namespace DSWIntegral.Dtos
+using System.ComponentModel.DataAnnotations;
+using DSWIntegral.Dtos;
+
+public class CreateOrderDto
 {
-    public class CreateOrderDto
-    {
-        public Guid CustomerId { get; set; }
-        public List<CreateOrderItemDto> Items { get; set; } = new();
-    }
+    [Required] public Guid CustomerId { get; set; }
+    [Required] public string ShippingAddress { get; set; } = null!;
+    [Required] public string BillingAddress  { get; set; } = null!;
+    [Required] public List<CreateOrderItemDto> Items { get; set; } = new();
 }
