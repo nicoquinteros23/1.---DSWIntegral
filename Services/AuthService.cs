@@ -35,7 +35,7 @@ namespace DSWIntegral.Services
                 Name    = dto.Name,
                 Email   = dto.Email,
                 Address = dto.Address,
-                Role    = dto.Role ?? "Customer"    // ← Asigna rol
+                Role    = "Customer"    // ← Asigna rol
             };
 
             customer.PasswordHash = _hasher.HashPassword(customer, dto.Password);

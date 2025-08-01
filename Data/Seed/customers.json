@@ -12,5 +12,12 @@
     "Email": "bob@semilla.com",
     "Address": "Avenida Semilla 456",
     "Password": "OtraPass456!"
-  }
+  },
+  {
+  "Id": "33333333-3333-3333-3333-333333333333",
+  "Name": "Nicolas Quinteros",
+  "Email": "nico@semilla.com",
+  "Address": "Test 456",
+  "Password": "test123"
+}
 ]
