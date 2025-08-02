@@ -10,6 +10,8 @@ Este documento muestra cómo probar cada módulo del proyecto **DSWIntegral** co
 
    ```bash
    export ASPNETCORE_ENVIRONMENT=Development
+   COMANDO PARA GUID:     uuidgen
+
    ```
 2. Ejecuta la API:
 
